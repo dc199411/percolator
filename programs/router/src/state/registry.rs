@@ -192,6 +192,34 @@ impl SlabRegistry {
             Err(())
         }
     }
+
+    /// Check if a slab is registered and active
+    pub fn is_slab_registered(&self, slab_id: &Pubkey) -> bool {
+        self.find_slab(slab_id).is_some()
+    }
+
+    /// Get slab entry by program ID
+    pub fn get_slab(&self, slab_id: &Pubkey) -> Option<&SlabEntry> {
+        self.find_slab(slab_id).map(|(_, entry)| entry)
+    }
+
+    /// Get slab entry by index
+    pub fn get_slab_by_index(&self, idx: u16) -> Option<&SlabEntry> {
+        if idx < self.slab_count && self.slabs[idx as usize].active {
+            Some(&self.slabs[idx as usize])
+        } else {
+            None
+        }
+    }
+
+    /// Get all active slabs
+    pub fn active_slabs(&self) -> impl Iterator<Item = (u16, &SlabEntry)> {
+        self.slabs[..self.slab_count as usize]
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.active)
+            .map(|(i, e)| (i as u16, e))
+    }
 }
 
 #[cfg(test)]

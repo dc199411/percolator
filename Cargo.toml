@@ -82,6 +82,10 @@ path = "tests/chaos_soak.rs"
 name = "benchmark_cu"
 path = "tests/benchmark_cu.rs"
 
+[[test]]
+name = "integration_multi_slab"
+path = "tests/integration_multi_slab.rs"
+
 [profile.dev]
 panic = "abort"
 
