@@ -197,14 +197,26 @@ The `tests/` directory contains templates for integration tests and property-bas
 ### Build for Solana BPF
 ```bash
 # Install Solana toolchain (if not already installed)
-sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
+sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.0/install)"
+export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 
 # Build BPF programs
-cargo build-sbf
+cargo build-sbf --manifest-path programs/slab/Cargo.toml --features bpf-entrypoint
+cargo build-sbf --manifest-path programs/router/Cargo.toml --features bpf-entrypoint
 
-# Build specific program
-cargo build-sbf --manifest-path programs/slab/Cargo.toml
-cargo build-sbf --manifest-path programs/router/Cargo.toml
+# Programs are output to target/deploy/
+ls -la target/deploy/*.so
+# percolator_router.so (~31KB)
+# percolator_slab.so (~66KB)
+```
+
+### Deploy to Local Validator
+```bash
+# Start local validator with programs pre-loaded
+./scripts/start-validator.sh
+
+# Or deploy manually after starting validator
+./scripts/deploy-local.sh
 ```
 
 ## Surfpool Integration
@@ -367,13 +379,20 @@ cargo test --test integration test_reserve_and_commit_flow
 - Integration test templates with Surfpool (3 test files with 15+ scenarios)
 - Property-based test framework with invariant checks
 
+### ✅ Phase 2 Complete - Build and Deploy
+- **Solana Platform Tools** installed (v2.1.0)
+- **BPF builds** working with `cargo build-sbf`
+- **Program sizes**: Router ~31KB, Slab ~66KB (well under 10MB limit)
+- **Stack overflow fixes** for large struct initialization
+- **Deployment scripts** created (`scripts/deploy-local.sh`, `scripts/start-validator.sh`)
+- **CU measurement framework** with budget estimates (`tests/cu_measurement.rs`)
+
 ### 🚧 In Progress
 - Integration testing infrastructure (Surfpool setup and runbook development)
-- Solana build tooling setup (cargo build-sbf installation)
 
 ### 📋 Next Steps (Priority Order)
 
-**Phase 2: Build and Deploy**
+**Phase 3: Advanced Testing**
 - Set up Solana Platform Tools for BPF builds
 - Build programs with `cargo build-sbf`
 - Deploy to local test validator for manual testing
@@ -448,6 +467,6 @@ Apache-2.0
 
 ---
 
-**Status**: Phase 1 Complete ✅ | 71 unit tests passing ✅ | Phase 2 (build & deploy) next 🚀
+**Status**: Phase 1-2 Complete ✅ | 71 unit tests passing ✅ | BPF builds working ✅ | Phase 3 (testing) next 🚀
 
 **Last Updated**: December 30, 2025

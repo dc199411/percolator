@@ -54,15 +54,20 @@ pub struct SlabRegistry {
 impl SlabRegistry {
     pub const LEN: usize = core::mem::size_of::<Self>();
 
-    /// Initialize new registry
-    pub fn new(router_id: Pubkey, governance: Pubkey, bump: u8) -> Self {
-        Self {
-            router_id,
-            governance,
-            slab_count: 0,
-            bump,
-            _padding: [0; 5],
-            slabs: [SlabEntry {
+    /// Initialize registry in-place (avoids stack allocation of large struct)
+    /// 
+    /// # Safety
+    /// The caller must ensure the memory is properly allocated and aligned
+    pub fn init_in_place(&mut self, router_id: Pubkey, governance: Pubkey, bump: u8) {
+        self.router_id = router_id;
+        self.governance = governance;
+        self.slab_count = 0;
+        self.bump = bump;
+        self._padding = [0; 5];
+        
+        // Initialize slabs array in-place (loop avoids stack allocation)
+        for i in 0..MAX_SLABS {
+            self.slabs[i] = SlabEntry {
                 slab_id: Pubkey::default(),
                 version_hash: [0; 32],
                 oracle_id: Pubkey::default(),
@@ -75,8 +80,39 @@ impl SlabRegistry {
                 registered_ts: 0,
                 active: false,
                 _padding: [0; 7],
-            }; MAX_SLABS],
+            };
         }
+    }
+
+    /// Initialize new registry (WARNING: Creates large struct on stack)
+    /// Use `init_in_place` for BPF programs to avoid stack overflow
+    #[cfg(not(target_os = "solana"))]
+    pub fn new(router_id: Pubkey, governance: Pubkey, bump: u8) -> Self {
+        let mut registry = Self {
+            router_id,
+            governance,
+            slab_count: 0,
+            bump,
+            _padding: [0; 5],
+            slabs: unsafe { core::mem::zeroed() },
+        };
+        for i in 0..MAX_SLABS {
+            registry.slabs[i] = SlabEntry {
+                slab_id: Pubkey::default(),
+                version_hash: [0; 32],
+                oracle_id: Pubkey::default(),
+                imr: 0,
+                mmr: 0,
+                maker_fee_cap: 0,
+                taker_fee_cap: 0,
+                latency_sla_ms: 0,
+                max_exposure: 0,
+                registered_ts: 0,
+                active: false,
+                _padding: [0; 7],
+            };
+        }
+        registry
     }
 
     /// Register a new slab

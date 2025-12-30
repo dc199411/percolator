@@ -38,7 +38,31 @@ pub struct Portfolio {
 impl Portfolio {
     pub const LEN: usize = core::mem::size_of::<Self>();
 
-    /// Initialize new portfolio
+    /// Initialize portfolio in-place (avoids stack allocation of large struct)
+    /// 
+    /// # Safety
+    /// The caller must ensure the memory is properly allocated and aligned
+    pub fn init_in_place(&mut self, router_id: Pubkey, user: Pubkey, bump: u8) {
+        self.router_id = router_id;
+        self.user = user;
+        self.equity = 0;
+        self.im = 0;
+        self.mm = 0;
+        self.free_collateral = 0;
+        self.last_mark_ts = 0;
+        self.exposure_count = 0;
+        self.bump = bump;
+        self._padding = [0; 5];
+        
+        // Initialize exposures in-place (loop avoids stack allocation)
+        for i in 0..(MAX_SLABS * MAX_INSTRUMENTS) {
+            self.exposures[i] = (0, 0, 0);
+        }
+    }
+
+    /// Initialize new portfolio (WARNING: Creates large struct on stack)
+    /// Use `init_in_place` for BPF programs to avoid stack overflow
+    #[cfg(not(target_os = "solana"))]
     pub fn new(router_id: Pubkey, user: Pubkey, bump: u8) -> Self {
         Self {
             router_id,
