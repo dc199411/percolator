@@ -1,0 +1,185 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0a0a0f;
+  --foreground: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #12121a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a3a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a4a;
+}
+
+/* Wallet adapter styles override */
+.wallet-adapter-button {
+  background: linear-gradient(135deg, #00d4aa 0%, #00b894 100%) !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.wallet-adapter-button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.4) !important;
+}
+
+.wallet-adapter-dropdown-list {
+  background: #12121a !important;
+  border: 1px solid #2a2a3a !important;
+  border-radius: 12px !important;
+}
+
+.wallet-adapter-dropdown-list-item {
+  background: transparent !important;
+  color: #ffffff !important;
+}
+
+.wallet-adapter-dropdown-list-item:hover {
+  background: #1a1a24 !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  background: #12121a !important;
+  border: 1px solid #2a2a3a !important;
+}
+
+/* Input number arrows hidden */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Animation classes */
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 3s ease infinite;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Glow effects */
+.glow-text {
+  text-shadow: 0 0 20px rgba(0, 212, 170, 0.5);
+}
+
+.glow-border {
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.2);
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(18, 18, 26, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Orderbook styling */
+.orderbook-row {
+  transition: background-color 0.1s ease;
+}
+
+.orderbook-row:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Price flash animation */
+.price-flash-up {
+  animation: flashUp 0.3s ease;
+}
+
+.price-flash-down {
+  animation: flashDown 0.3s ease;
+}
+
+@keyframes flashUp {
+  0% {
+    background-color: rgba(0, 212, 170, 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes flashDown {
+  0% {
+    background-color: rgba(255, 71, 87, 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Responsive table */
+.responsive-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Focus styles */
+input:focus,
+button:focus,
+select:focus {
+  outline: none;
+}
+
+input:focus-visible,
+button:focus-visible,
+select:focus-visible {
+  box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.5);
+}
+
+/* Toast styles */
+.toast-container {
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
