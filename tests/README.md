@@ -1,125 +1,45 @@
-# Integration and Property Tests
+# Percolator Tests
 
-This directory contains integration tests and property-based tests for Percolator.
+Integration tests, CU measurement tests, and property-based tests.
 
-## Status
+## Quick Start
 
-**⚠️ These tests are currently disabled and serve as documentation/templates.**
+```bash
+# Build BPF programs
+cargo build-sbf --manifest-path programs/slab/Cargo.toml --features bpf-entrypoint
+cargo build-sbf --manifest-path programs/router/Cargo.toml --features bpf-entrypoint
 
-The test code is commented out because:
-1. Integration tests require [Surfpool](https://github.com/txtx/surfpool) to be installed and running
-2. Property tests require uncommenting the proptest macros
-3. Some helper functions and instruction builders need to be implemented
+# Run CU measurement tests
+SBF_OUT_DIR=target/deploy cargo test --test cu_measurement -- --nocapture
+
+# Run all library tests (71 tests)
+cargo test --workspace --lib
+```
 
 ## Test Files
 
-### Integration Tests (require Surfpool)
+| File | Status | Description |
+|------|--------|-------------|
+| `cu_measurement.rs` | ✅ Working | CU budget verification |
+| `common/mod.rs` | ✅ Working | Shared test utilities |
+| `integration_*.rs` | 📝 Template | Integration test templates |
+| `property_invariants.rs` | 📝 Template | Property-based tests |
 
-- **`integration_reserve_commit.rs`** - Tests for the two-phase reserve-commit flow
-  - Reserve and commit execution
-  - Reservation cancellation
-  - Reservation expiry
-  - Insufficient liquidity handling
-  - VWAP calculation across price levels
+## CU Budget Summary
 
-- **`integration_portfolio.rs`** - Tests for cross-slab portfolio margin
-  - Multi-slab position aggregation
-  - Cross-margin calculation
-  - Portfolio liquidation
-  - User isolation
+| Instruction | Typical | Max | % of 1.4M |
+|-------------|---------|-----|-----------|
+| Initialize | 15,000 | 30,000 | 2.14% |
+| Add Instrument | 8,000 | 15,000 | 1.07% |
+| Reserve | 75,000 | 150,000 | 10.71% |
+| Commit | 50,000 | 100,000 | 7.14% |
+| Cancel | 20,000 | 40,000 | 2.86% |
+| Batch Open | 40,000 | 80,000 | 5.71% |
+| Update Funding | 60,000 | 150,000 | 10.71% |
+| Liquidation | 100,000 | 200,000 | 14.29% |
+| **Reserve+Commit** | **150,000** | **300,000** | **21.43%** |
 
-- **`integration_anti_toxicity.rs`** - Tests for anti-toxicity mechanisms
-  - Pending order promotion (batch windows)
-  - JIT penalty detection and application
-  - Kill band enforcement
-  - Aggressor roundtrip guard (ARG)
-  - Freeze level triggers
+## Program Sizes
 
-### Property Tests
-
-- **`property_invariants.rs`** - Property-based tests for protocol invariants
-  - Safety: Capability constraints, escrow isolation
-  - Matching: Reserved qty bounds, VWAP calculation, acyclic book links
-  - Risk: Margin monotonicity, liquidation thresholds, cross-margin convexity
-  - Anti-toxicity: Kill band thresholds, JIT detection
-
-## Running Integration Tests
-
-Once Surfpool is installed and the test code is uncommented:
-
-```bash
-# Terminal 1: Start Surfpool validator
-cd surfpool
-npm run validator
-
-# Terminal 2: Run integration tests
-cd percolator
-cargo test --test integration_reserve_commit
-cargo test --test integration_portfolio
-cargo test --test integration_anti_toxicity
-```
-
-## Running Property Tests
-
-Uncomment the test code in `property_invariants.rs` and run:
-
-```bash
-cargo test --test property_invariants
-
-# Run with more test cases
-cargo test --test property_invariants -- --test-threads=1
-
-# Run specific property test
-cargo test --test property_invariants prop_capability_amount_constraint
-```
-
-## Setup Instructions
-
-### 1. Install Surfpool
-
-```bash
-git clone https://github.com/txtx/surfpool
-cd surfpool
-npm install
-npm run validator
-```
-
-### 2. Uncomment Test Code
-
-Remove the `/*` and `*/` comment markers from the test modules.
-
-### 3. Implement Missing Helper Functions
-
-Some tests reference helper functions that need to be implemented:
-- `create_initialize_instruction()`
-- `create_reserve_instruction()`
-- `create_commit_instruction()`
-- `create_cancel_instruction()`
-- `create_order_instruction()`
-- `create_batch_open_instruction()`
-- etc.
-
-These should be added to the program packages and exported.
-
-### 4. Run Tests
-
-```bash
-cargo test --workspace --tests
-```
-
-## Test Coverage Goals
-
-- [x] Unit tests for core functionality (53 tests passing)
-- [ ] Integration tests with Surfpool (templates created)
-- [ ] Property-based invariant tests (templates created)
-- [ ] Fuzz testing for instruction parsing
-- [ ] Stress tests for 10 MB state management
-- [ ] CU consumption benchmarks
-
-## Contributing
-
-When adding new tests:
-1. Follow the existing template structure
-2. Document test scenarios clearly
-3. Verify tests pass before committing
-4. Update this README with new test descriptions
+- **Slab:** ~66KB (0.63% of 10MB limit)
+- **Router:** ~31KB (0.29% of 10MB limit)

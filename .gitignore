@@ -1,0 +1,25 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Solana
+.ledger/
+test-ledger/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log

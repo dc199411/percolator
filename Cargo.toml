@@ -1,3 +1,10 @@
+[package]
+name = "percolator"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
 [workspace]
 resolver = "2"
 members = [
@@ -10,7 +17,7 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/yourusername/percolator"
+repository = "https://github.com/dc199411/percolator"
 
 [workspace.dependencies]
 pinocchio = "0.9.2"
@@ -22,8 +29,52 @@ solana-program-test = "2.1"
 solana-sdk = "2.1"
 tokio = { version = "1", features = ["full"] }
 
+[dependencies]
+percolator-common = { path = "programs/common" }
+
+[dev-dependencies]
+solana-program-test = "2.1"
+solana-sdk = "2.1"
+tokio = { version = "1", features = ["full", "rt-multi-thread", "macros"] }
+proptest = "1.4"
+
+[[test]]
+name = "cu_measurement"
+path = "tests/cu_measurement.rs"
+
+[[test]]
+name = "integration_reserve_commit"
+path = "tests/integration_reserve_commit.rs"
+
+[[test]]
+name = "integration_portfolio"
+path = "tests/integration_portfolio.rs"
+
+[[test]]
+name = "integration_anti_toxicity"
+path = "tests/integration_anti_toxicity.rs"
+
+[[test]]
+name = "property_invariants"
+path = "tests/property_invariants.rs"
+
+[[test]]
+name = "v0_capital_efficiency"
+path = "tests/v0_capital_efficiency.rs"
+
+[[test]]
+name = "v0_commit_fill"
+path = "tests/v0_commit_fill.rs"
+
+[[test]]
+name = "v0_execute_cross_slab"
+path = "tests/v0_execute_cross_slab.rs"
+
 [profile.dev]
 panic = "abort"
+
+[profile.test]
+panic = "unwind"
 
 [profile.release]
 panic = "abort"
