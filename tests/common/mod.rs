@@ -1,6 +1,6 @@
 //! Common test utilities for integration tests
 //!
-//! This module provides shared test infrastructure for integration testing
+//! Provides shared infrastructure for testing Percolator programs
 //! using the solana-program-test crate.
 
 use solana_program_test::*;
@@ -10,27 +10,34 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
     instruction::{AccountMeta, Instruction},
-    system_instruction,
     rent::Rent,
+    compute_budget::ComputeBudgetInstruction,
 };
+use std::str::FromStr;
 
-// Program IDs (from lib.rs declarations)
-pub const SLAB_PROGRAM_ID: Pubkey = Pubkey::new_from_array([
-    0x0b, 0x3a, 0x5b, 0x7c, 0x8d, 0x9e, 0x0f, 0x1a,
-    0x2b, 0x3c, 0x4d, 0x5e, 0x6f, 0x7a, 0x8b, 0x9c,
-    0x0d, 0x1e, 0x2f, 0x3a, 0x4b, 0x5c, 0x6d, 0x7e,
-    0x8f, 0x9a, 0x0b, 0x1c, 0x2d, 0x3e, 0x4f, 0x50,
-]);
+// ============================================================================
+// PROGRAM IDS
+// ============================================================================
 
-pub const ROUTER_PROGRAM_ID: Pubkey = Pubkey::new_from_array([
-    0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f, 0x7a, 0x8b,
-    0x9c, 0x0d, 0x1e, 0x2f, 0x3a, 0x4b, 0x5c, 0x6d,
-    0x7e, 0x8f, 0x9a, 0x0b, 0x1c, 0x2d, 0x3e, 0x4f,
-    0x50, 0x61, 0x72, 0x83, 0x94, 0xa5, 0xb6, 0xc7,
-]);
+pub const SLAB_PROGRAM_ID_STR: &str = "SLabZ6PsDLh2X6HzEoqxFDMqCVcJXDKCNEYuPzUvGPk";
+pub const ROUTER_PROGRAM_ID_STR: &str = "RoutR1VdCpHqj89WEMJhb6TkGT9cPfr1rVjhM3e2YQr";
 
-/// Slab instruction discriminators
-pub mod slab_instruction {
+pub fn slab_program_id() -> Pubkey {
+    Pubkey::from_str(SLAB_PROGRAM_ID_STR).unwrap()
+}
+
+pub fn router_program_id() -> Pubkey {
+    Pubkey::from_str(ROUTER_PROGRAM_ID_STR).unwrap()
+}
+
+/// Slab state size (10 MB)
+pub const SLAB_STATE_SIZE: usize = 10 * 1024 * 1024;
+
+// ============================================================================
+// INSTRUCTION DISCRIMINATORS
+// ============================================================================
+
+pub mod slab_ix {
     pub const RESERVE: u8 = 0;
     pub const COMMIT: u8 = 1;
     pub const CANCEL: u8 = 2;
@@ -41,8 +48,7 @@ pub mod slab_instruction {
     pub const LIQUIDATION: u8 = 7;
 }
 
-/// Router instruction discriminators
-pub mod router_instruction {
+pub mod router_ix {
     pub const INITIALIZE: u8 = 0;
     pub const INITIALIZE_PORTFOLIO: u8 = 1;
     pub const DEPOSIT: u8 = 2;
@@ -50,89 +56,128 @@ pub mod router_instruction {
     pub const EXECUTE_CROSS_SLAB: u8 = 4;
 }
 
-/// Test context for integration tests
+// ============================================================================
+// TEST CONTEXT
+// ============================================================================
+
+/// Enhanced test context for integration tests
 pub struct TestContext {
-    pub banks_client: BanksClient,
-    pub payer: Keypair,
-    pub recent_blockhash: solana_sdk::hash::Hash,
+    pub ctx: ProgramTestContext,
+    pub slab_program_id: Pubkey,
+    pub router_program_id: Pubkey,
 }
 
 impl TestContext {
-    /// Create a new test context with programs loaded
-    pub async fn new() -> Self {
+    /// Create test context with slab program loaded
+    pub async fn new_with_slab() -> Self {
+        let slab_id = slab_program_id();
+        let router_id = router_program_id();
+        
         let mut program_test = ProgramTest::default();
+        program_test.add_program("percolator_slab", slab_id, None);
+        program_test.set_compute_max_units(1_400_000);
         
-        // Note: In a real test, we would load the actual BPF programs
-        // For now, we'll use mock accounts for testing
-        
-        let (banks_client, payer, recent_blockhash) = program_test.start().await;
+        let ctx = program_test.start_with_context().await;
         
         Self {
-            banks_client,
-            payer,
-            recent_blockhash,
+            ctx,
+            slab_program_id: slab_id,
+            router_program_id: router_id,
         }
     }
-
-    /// Refresh blockhash
-    pub async fn refresh_blockhash(&mut self) {
-        self.recent_blockhash = self.banks_client.get_latest_blockhash().await.unwrap();
+    
+    /// Create test context with both programs
+    pub async fn new_with_both() -> Self {
+        let slab_id = slab_program_id();
+        let router_id = router_program_id();
+        
+        let mut program_test = ProgramTest::default();
+        program_test.add_program("percolator_slab", slab_id, None);
+        program_test.add_program("percolator_router", router_id, None);
+        program_test.set_compute_max_units(1_400_000);
+        
+        let ctx = program_test.start_with_context().await;
+        
+        Self {
+            ctx,
+            slab_program_id: slab_id,
+            router_program_id: router_id,
+        }
     }
-
-    /// Send a transaction
-    pub async fn send_transaction(&mut self, instructions: &[Instruction], signers: &[&Keypair]) -> Result<(), BanksClientError> {
-        self.refresh_blockhash().await;
-        
-        let mut all_signers = vec![&self.payer];
-        all_signers.extend(signers);
-        
-        let transaction = Transaction::new_signed_with_payer(
-            instructions,
-            Some(&self.payer.pubkey()),
-            &all_signers,
-            self.recent_blockhash,
-        );
-        
-        self.banks_client.process_transaction(transaction).await
+    
+    /// Get latest blockhash
+    pub async fn get_blockhash(&mut self) -> solana_sdk::hash::Hash {
+        self.ctx.banks_client.get_latest_blockhash().await.unwrap()
     }
-
-    /// Create an account with specified lamports
-    pub async fn create_account(&mut self, keypair: &Keypair, lamports: u64, space: usize, owner: &Pubkey) -> Result<(), BanksClientError> {
+    
+    /// Process a transaction
+    pub async fn process_tx(&mut self, tx: Transaction) -> Result<(), BanksClientError> {
+        self.ctx.banks_client.process_transaction(tx).await
+    }
+    
+    /// Create a slab account with 10MB
+    pub async fn create_slab_account(&mut self) -> Keypair {
+        let slab = Keypair::new();
         let rent = Rent::default();
-        let min_lamports = rent.minimum_balance(space).max(lamports);
+        let lamports = rent.minimum_balance(SLAB_STATE_SIZE);
         
-        let instruction = system_instruction::create_account(
-            &self.payer.pubkey(),
-            &keypair.pubkey(),
-            min_lamports,
-            space as u64,
-            owner,
+        let create_ix = solana_sdk::system_instruction::create_account(
+            &self.ctx.payer.pubkey(),
+            &slab.pubkey(),
+            lamports,
+            SLAB_STATE_SIZE as u64,
+            &self.slab_program_id,
         );
         
-        self.send_transaction(&[instruction], &[keypair]).await
+        let blockhash = self.get_blockhash().await;
+        let tx = Transaction::new_signed_with_payer(
+            &[create_ix],
+            Some(&self.ctx.payer.pubkey()),
+            &[&self.ctx.payer, &slab],
+            blockhash,
+        );
+        
+        self.process_tx(tx).await.unwrap();
+        slab
     }
-
+    
     /// Get account data
     pub async fn get_account(&mut self, pubkey: &Pubkey) -> Option<Account> {
-        self.banks_client.get_account(*pubkey).await.unwrap()
+        self.ctx.banks_client.get_account(*pubkey).await.unwrap()
     }
-
-    /// Airdrop SOL to an account
-    pub async fn airdrop(&mut self, to: &Pubkey, lamports: u64) -> Result<(), BanksClientError> {
-        let instruction = system_instruction::transfer(
-            &self.payer.pubkey(),
-            to,
-            lamports,
+    
+    /// Send instruction with compute budget
+    pub async fn send_ix_with_budget(
+        &mut self, 
+        ix: Instruction, 
+        budget: u32,
+        signers: &[&Keypair]
+    ) -> Result<(), BanksClientError> {
+        let compute_ix = ComputeBudgetInstruction::set_compute_unit_limit(budget);
+        let blockhash = self.get_blockhash().await;
+        
+        let mut all_signers: Vec<&Keypair> = vec![&self.ctx.payer];
+        all_signers.extend(signers);
+        
+        let tx = Transaction::new_signed_with_payer(
+            &[compute_ix, ix],
+            Some(&self.ctx.payer.pubkey()),
+            &all_signers,
+            blockhash,
         );
         
-        self.send_transaction(&[instruction], &[]).await
+        self.process_tx(tx).await
     }
 }
 
+// ============================================================================
+// INSTRUCTION BUILDERS
+// ============================================================================
+
 /// Create initialize slab instruction
-pub fn create_initialize_slab_instruction(
+pub fn ix_initialize_slab(
     program_id: &Pubkey,
-    slab_account: &Pubkey,
+    slab: &Pubkey,
     market_id: [u8; 32],
     lp_owner: &Pubkey,
     router_id: &Pubkey,
@@ -142,7 +187,7 @@ pub fn create_initialize_slab_instruction(
     taker_fee_bps: u64,
     batch_ms: u64,
 ) -> Instruction {
-    let mut data = vec![slab_instruction::INITIALIZE];
+    let mut data = vec![slab_ix::INITIALIZE];
     data.extend_from_slice(&market_id);
     data.extend_from_slice(lp_owner.as_ref());
     data.extend_from_slice(router_id.as_ref());
@@ -154,24 +199,22 @@ pub fn create_initialize_slab_instruction(
     
     Instruction {
         program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*slab_account, false),
-        ],
+        accounts: vec![AccountMeta::new(*slab, false)],
         data,
     }
 }
 
 /// Create add instrument instruction
-pub fn create_add_instrument_instruction(
+pub fn ix_add_instrument(
     program_id: &Pubkey,
-    slab_account: &Pubkey,
+    slab: &Pubkey,
     symbol: [u8; 8],
     contract_size: u64,
     tick: u64,
     lot: u64,
     initial_mark: u64,
 ) -> Instruction {
-    let mut data = vec![slab_instruction::ADD_INSTRUMENT];
+    let mut data = vec![slab_ix::ADD_INSTRUMENT];
     data.extend_from_slice(&symbol);
     data.extend_from_slice(&contract_size.to_le_bytes());
     data.extend_from_slice(&tick.to_le_bytes());
@@ -180,17 +223,33 @@ pub fn create_add_instrument_instruction(
     
     Instruction {
         program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*slab_account, false),
-        ],
+        accounts: vec![AccountMeta::new(*slab, false)],
+        data,
+    }
+}
+
+/// Create batch open instruction
+pub fn ix_batch_open(
+    program_id: &Pubkey,
+    slab: &Pubkey,
+    instrument_idx: u16,
+    current_ts: u64,
+) -> Instruction {
+    let mut data = vec![slab_ix::BATCH_OPEN];
+    data.extend_from_slice(&instrument_idx.to_le_bytes());
+    data.extend_from_slice(&current_ts.to_le_bytes());
+    
+    Instruction {
+        program_id: *program_id,
+        accounts: vec![AccountMeta::new(*slab, false)],
         data,
     }
 }
 
 /// Create reserve instruction
-pub fn create_reserve_instruction(
+pub fn ix_reserve(
     program_id: &Pubkey,
-    slab_account: &Pubkey,
+    slab: &Pubkey,
     account_idx: u32,
     instrument_idx: u16,
     side: u8,
@@ -200,7 +259,7 @@ pub fn create_reserve_instruction(
     commitment_hash: [u8; 32],
     route_id: u64,
 ) -> Instruction {
-    let mut data = vec![slab_instruction::RESERVE];
+    let mut data = vec![slab_ix::RESERVE];
     data.extend_from_slice(&account_idx.to_le_bytes());
     data.extend_from_slice(&instrument_idx.to_le_bytes());
     data.push(side);
@@ -212,111 +271,105 @@ pub fn create_reserve_instruction(
     
     Instruction {
         program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*slab_account, false),
-        ],
+        accounts: vec![AccountMeta::new(*slab, false)],
         data,
     }
 }
 
 /// Create commit instruction
-pub fn create_commit_instruction(
+pub fn ix_commit(
     program_id: &Pubkey,
-    slab_account: &Pubkey,
+    slab: &Pubkey,
     hold_id: u64,
     current_ts: u64,
 ) -> Instruction {
-    let mut data = vec![slab_instruction::COMMIT];
+    let mut data = vec![slab_ix::COMMIT];
     data.extend_from_slice(&hold_id.to_le_bytes());
     data.extend_from_slice(&current_ts.to_le_bytes());
     
     Instruction {
         program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*slab_account, false),
-        ],
+        accounts: vec![AccountMeta::new(*slab, false)],
         data,
     }
 }
 
 /// Create cancel instruction
-pub fn create_cancel_instruction(
-    program_id: &Pubkey,
-    slab_account: &Pubkey,
-    hold_id: u64,
-) -> Instruction {
-    let mut data = vec![slab_instruction::CANCEL];
+pub fn ix_cancel(program_id: &Pubkey, slab: &Pubkey, hold_id: u64) -> Instruction {
+    let mut data = vec![slab_ix::CANCEL];
     data.extend_from_slice(&hold_id.to_le_bytes());
     
     Instruction {
         program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*slab_account, false),
-        ],
-        data,
-    }
-}
-
-/// Create batch open instruction
-pub fn create_batch_open_instruction(
-    program_id: &Pubkey,
-    slab_account: &Pubkey,
-    instrument_idx: u16,
-    current_ts: u64,
-) -> Instruction {
-    let mut data = vec![slab_instruction::BATCH_OPEN];
-    data.extend_from_slice(&instrument_idx.to_le_bytes());
-    data.extend_from_slice(&current_ts.to_le_bytes());
-    
-    Instruction {
-        program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*slab_account, false),
-        ],
+        accounts: vec![AccountMeta::new(*slab, false)],
         data,
     }
 }
 
 /// Create update funding instruction
-pub fn create_update_funding_instruction(
+pub fn ix_update_funding(
     program_id: &Pubkey,
-    slab_account: &Pubkey,
+    slab: &Pubkey,
     instrument_idx: u16,
     index_price: u64,
     current_ts: u64,
 ) -> Instruction {
-    let mut data = vec![slab_instruction::UPDATE_FUNDING];
+    let mut data = vec![slab_ix::UPDATE_FUNDING];
     data.extend_from_slice(&instrument_idx.to_le_bytes());
     data.extend_from_slice(&index_price.to_le_bytes());
     data.extend_from_slice(&current_ts.to_le_bytes());
     
     Instruction {
         program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*slab_account, false),
-        ],
+        accounts: vec![AccountMeta::new(*slab, false)],
         data,
     }
 }
 
 /// Create liquidation instruction
-pub fn create_liquidation_instruction(
+pub fn ix_liquidation(
     program_id: &Pubkey,
-    slab_account: &Pubkey,
+    slab: &Pubkey,
     account_idx: u32,
     deficit_target: i128,
     current_ts: u64,
 ) -> Instruction {
-    let mut data = vec![slab_instruction::LIQUIDATION];
+    let mut data = vec![slab_ix::LIQUIDATION];
     data.extend_from_slice(&account_idx.to_le_bytes());
     data.extend_from_slice(&deficit_target.to_le_bytes());
     data.extend_from_slice(&current_ts.to_le_bytes());
     
     Instruction {
         program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*slab_account, false),
-        ],
+        accounts: vec![AccountMeta::new(*slab, false)],
         data,
     }
+}
+
+// ============================================================================
+// TEST HELPERS
+// ============================================================================
+
+/// Check if BPF programs are available
+pub fn bpf_available() -> bool {
+    std::path::Path::new("target/deploy/percolator_slab.so").exists() &&
+    (std::env::var("SBF_OUT_DIR").is_ok() || std::env::var("BPF_OUT_DIR").is_ok())
+}
+
+/// Create a market ID from string
+pub fn market_id(name: &str) -> [u8; 32] {
+    let mut id = [0u8; 32];
+    let bytes = name.as_bytes();
+    let len = bytes.len().min(32);
+    id[..len].copy_from_slice(&bytes[..len]);
+    id
+}
+
+/// Create a symbol from string
+pub fn symbol(name: &str) -> [u8; 8] {
+    let mut sym = [0u8; 8];
+    let bytes = name.as_bytes();
+    let len = bytes.len().min(8);
+    sym[..len].copy_from_slice(&bytes[..len]);
+    sym
 }
