@@ -70,6 +70,18 @@ path = "tests/v0_commit_fill.rs"
 name = "v0_execute_cross_slab"
 path = "tests/v0_execute_cross_slab.rs"
 
+[[test]]
+name = "fuzz_instructions"
+path = "tests/fuzz_instructions.rs"
+
+[[test]]
+name = "chaos_soak"
+path = "tests/chaos_soak.rs"
+
+[[test]]
+name = "benchmark_cu"
+path = "tests/benchmark_cu.rs"
+
 [profile.dev]
 panic = "abort"
 
