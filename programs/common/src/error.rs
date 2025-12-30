@@ -72,6 +72,13 @@ pub enum PercolatorError {
     AtomicOperationFailed = 605,
     CpiError = 606,
     InvalidSlabCount = 607,
+
+    // Insurance pool errors (700-799)
+    InsuranceBelowThreshold = 700,
+    NoPendingWithdrawal = 701,
+    WithdrawalLocked = 702,
+    InvalidInsuranceRate = 703,
+    AdlRequired = 704,
 }
 
 impl From<PercolatorError> for u64 {
