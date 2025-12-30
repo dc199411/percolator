@@ -117,37 +117,42 @@ LP-run perp engines with 10 MB state budget, fully self-contained matching and s
 
 ## Test Coverage
 
-**53 tests passing** across all packages:
+**71 tests passing** across all packages:
 
-### percolator-common (27 tests)
+### percolator-common (35 tests)
 - ✅ VWAP calculations (single/multiple fills, zero quantity)
 - ✅ PnL calculations (long/short profit/loss, no change)
 - ✅ Funding payment calculations
 - ✅ Tick/lot alignment and rounding
 - ✅ Margin calculations (IM/MM, scaling with quantity/price)
 - ✅ Type defaults (Side, TimeInForce, MakerClass, OrderState, Order, Position)
+- ✅ Instruction reader parsing (u8, u16, u32, u64, u128, bytes, side)
 
-### percolator-router (7 tests)
+### percolator-router (6 tests)
 - ✅ Vault pledge/unpledge operations
 - ✅ Escrow credit/debit with nonce validation
 - ✅ Capability lifecycle (creation, usage, expiry)
-- ✅ Capability TTL capping (max 2 minutes)
 - ✅ Portfolio exposure tracking
 - ✅ Portfolio margin aggregation
 - ✅ Registry operations (add/validate slabs)
 
-### percolator-slab (19 tests)
+### percolator-slab (30 tests)
 - ✅ Pool allocation/free operations
 - ✅ Pool capacity limits and reuse
 - ✅ Header validation and monotonic IDs
+- ✅ Order/hold ID allocation
 - ✅ JIT penalty detection
-- ✅ Timestamp updates
-- ✅ Book sequence numbers
-- ✅ Reserve operation with max charge calculation
-- ✅ Margin requirement calculations
-- ✅ Slab size constraint (≤10 MB)
+- ✅ Kill band checks
+- ✅ Anti-toxicity parameter defaults
+- ✅ Reserve result sizing
+- ✅ Commit result sizing
+- ✅ Funding rate calculations
+- ✅ Liquidation price calculations (long/short)
+- ✅ Instrument summary sizing
+- ✅ Batch status tracking
+- ✅ Quote cache operations
 
-**Note:** PDA tests require Solana syscalls and are marked `#[cfg(target_os = "solana")]`. They will be tested in integration tests with Surfpool.
+**Note:** PDA tests require Solana syscalls and are marked `#[cfg(target_os = "solana")]`. They run during BPF builds.
 
 ## Building and Testing
 
@@ -163,7 +168,7 @@ cargo build --release
 cargo build --package percolator-slab
 ```
 
-### Testing
+### Unit Testing
 ```bash
 # Run all tests
 cargo test
@@ -186,14 +191,6 @@ cargo test -- --nocapture
 cargo test --release
 ```
 
-**Integration and Property Tests:**
-
-The `tests/` directory contains templates for integration tests and property-based tests. These are currently disabled (code commented out) and serve as documentation until Surfpool is available. See [`tests/README.md`](tests/README.md) for details on:
-- Integration test scenarios (15+ tests across 3 files)
-- Property-based invariant tests
-- Setup instructions for Surfpool
-- How to enable and run the tests
-
 ### Build for Solana BPF
 ```bash
 # Install Solana toolchain (if not already installed)
@@ -210,14 +207,42 @@ ls -la target/deploy/*.so
 # percolator_slab.so (~66KB)
 ```
 
-### Deploy to Local Validator
+### Local Validator Testing
 ```bash
 # Start local validator with programs pre-loaded
 ./scripts/start-validator.sh
 
-# Or deploy manually after starting validator
+# In another terminal, deploy programs manually
 ./scripts/deploy-local.sh
+
+# Or use solana CLI directly
+solana-test-validator --bpf-program SLabZ6PsDLh2X6HzEoqxFDMqCVcJXDKCNEYuPzUvGPk target/deploy/percolator_slab.so \
+                      --bpf-program RoutR1VdCpHqj89WEMJhb6TkGT9cPfr1rVjhM3e2YQr target/deploy/percolator_router.so
 ```
+
+### Compute Unit (CU) Budgets
+
+Expected CU consumption for each instruction (see `tests/cu_measurement.rs`):
+
+| Instruction | Typical CU | Max CU | Notes |
+|-------------|------------|--------|-------|
+| Reserve | 75,000 | 150,000 | Depends on book depth |
+| Commit | 50,000 | 100,000 | Depends on fill count |
+| Cancel | 20,000 | 40,000 | Releases slices |
+| Batch Open | 40,000 | 80,000 | Depends on pending queue |
+| Initialize | 15,000 | 30,000 | One-time setup |
+| Add Instrument | 8,000 | 15,000 | Per instrument |
+| Update Funding | 60,000 | 150,000 | Depends on position count |
+| Liquidation | 100,000 | 200,000 | Depends on positions to close |
+| **Reserve+Commit Flow** | **150,000** | **300,000** | **Full trade execution** |
+
+**Integration and Property Tests:**
+
+The `tests/` directory contains templates for integration tests and property-based tests. See [`tests/README.md`](tests/README.md) for details on:
+- Integration test scenarios (15+ tests across 3 files)
+- Property-based invariant tests
+- Setup instructions for Surfpool
+- How to enable and run the tests
 
 ## Surfpool Integration
 
@@ -393,21 +418,17 @@ cargo test --test integration test_reserve_and_commit_flow
 ### 📋 Next Steps (Priority Order)
 
 **Phase 3: Advanced Testing**
-- Set up Solana Platform Tools for BPF builds
-- Build programs with `cargo build-sbf`
-- Deploy to local test validator for manual testing
-- Measure CU (Compute Unit) consumption and optimize
-
-**Phase 3: Advanced Testing**
-- Complete integration tests (Option B: traditional Solana testing or Option A: Surfpool once runbook format is clarified)
-- Uncomment and run property-based tests
+- Complete integration tests using `solana-program-test` crate
+- Uncomment and run property-based tests with proptest
 - Add fuzz tests for instruction parsing and edge cases
 - Implement chaos/soak tests (24-72h load testing)
+- Benchmark actual CU consumption on local validator
 
 **Phase 4: Multi-Slab Coordination**
 - Router orchestration (multi-slab reserve/commit atomicity)
 - Cross-slab portfolio margin calculations
 - Global liquidation coordination
+- CPI integration between Router and Slab programs
 
 **Phase 5: Production Readiness**
 - Slab-level insurance pools (v1 feature)
@@ -430,29 +451,42 @@ cargo test --test integration test_reserve_and_commit_flow
 - **Testing**: [Surfpool](https://github.com/txtx/surfpool) - Local Solana test validator with mainnet state
 - **Language**: Rust (no_std, zero allocations, panic = abort)
 
-## Surfpool Integration Status
+## Testing Infrastructure
 
-### Current Status
-Surfpool is installed and configured, but full integration testing is pending due to challenges with Pinocchio-based programs.
+### Local Validator Scripts
 
-### Challenges
-1. **Runbook Format**: Surfpool uses `txtx` runbooks (`.tx` files) with a Terraform-inspired declarative syntax. The exact action syntax for Pinocchio programs (non-Anchor) is not well-documented.
-2. **Auto-generation**: Surfpool's automatic runbook generation appears optimized for Anchor projects. Pinocchio-based programs may require manually crafted runbooks.
-3. **Build Tooling**: `cargo build-sbf` is needed to compile programs for Solana BPF target, but isn't available via standard `cargo install`.
+**`scripts/start-validator.sh`** - Starts local Solana test validator with programs pre-loaded:
+```bash
+./scripts/start-validator.sh
+# Starts validator with:
+# - Slab program at SLabZ6PsDLh2X6HzEoqxFDMqCVcJXDKCNEYuPzUvGPk
+# - Router program at RoutR1VdCpHqj89WEMJhb6TkGT9cPfr1rVjhM3e2YQr
+# - Increased compute budget for testing
+# - Verbose logging enabled
+```
 
-### Files Created
-- `Surfpool.toml` - Manifest configuration for Percolator programs
-- `.surfpool/runbooks/test_basic.tx` - Basic connectivity test runbook (template)
+**`scripts/deploy-local.sh`** - Deploys programs to a running validator:
+```bash
+./scripts/deploy-local.sh
+# Deploys both programs and saves program IDs to .env.local
+```
 
-### Next Steps for Surfpool Integration
-1. **Option A - Manual Runbooks**: Research txtx documentation at `docs.txtx.sh` to understand proper action syntax for Pinocchio programs
-2. **Option B - Traditional Testing**: Use standard Solana testing tools with local validator:
-   - Build programs with `cargo build-sbf` (requires Solana Platform Tools installation)
-   - Deploy to local test validator with `solana program deploy`
-   - Write integration tests using `solana-program-test` crate
-3. **Option C - Anchor Wrapper**: Create minimal Anchor wrappers around Pinocchio programs for Surfpool compatibility
+### CU Measurement Framework
 
-For now, the project focuses on comprehensive unit testing (53 tests passing) while integration test infrastructure is being developed.
+The `tests/cu_measurement.rs` file provides:
+- CU budget constants for each instruction
+- `CuMeasurement` struct for recording and reporting CU usage
+- Framework for integration CU tests (requires `solana-program-test`)
+
+### Surfpool Integration (Optional)
+
+Surfpool can be used for more advanced integration testing with mainnet state:
+
+1. **Setup**: `git clone https://github.com/txtx/surfpool && cd surfpool && npm install`
+2. **Configuration**: `Surfpool.toml` in project root
+3. **Runbooks**: `.surfpool/runbooks/` for test scenarios
+
+For now, the recommended approach is using the standard `solana-test-validator` with the provided scripts.
 
 ## References
 
