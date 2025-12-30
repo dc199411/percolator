@@ -62,6 +62,16 @@ pub enum PercolatorError {
     InvalidCommitment = 503,
     JitPenaltyApplied = 504,
     RoundtripDetected = 505,
+
+    // Multi-slab coordination errors (600-699)
+    InvalidProgram = 600,
+    InsufficientBalance = 601,
+    PortfolioNotLiquidatable = 602,
+    MultiSlabReserveFailed = 603,
+    MultiSlabCommitFailed = 604,
+    AtomicOperationFailed = 605,
+    CpiError = 606,
+    InvalidSlabCount = 607,
 }
 
 impl From<PercolatorError> for u64 {

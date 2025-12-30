@@ -4,9 +4,9 @@ use crate::state::{Portfolio, Vault};
 use percolator_common::*;
 use pinocchio::{account_info::AccountInfo, msg, pubkey::Pubkey};
 
-/// Slab split - how much to execute on each slab
+/// Slab split specification for v0 cross-slab execution
 #[derive(Debug, Clone, Copy)]
-pub struct SlabSplit {
+pub struct V0SlabSplit {
     /// Slab account pubkey
     pub slab_id: Pubkey,
     /// Quantity to execute on this slab (1e6 scale)
@@ -42,7 +42,7 @@ pub fn process_execute_cross_slab(
     vault: &mut Vault,
     slab_accounts: &[AccountInfo],
     receipt_accounts: &[AccountInfo],
-    splits: &[SlabSplit],
+    splits: &[V0SlabSplit],
 ) -> Result<(), PercolatorError> {
     // Verify portfolio belongs to user
     if &portfolio.user != user {
@@ -127,7 +127,7 @@ fn calculate_net_exposure(portfolio: &Portfolio) -> i64 {
 }
 
 /// Calculate initial margin requirement (v0 simplified)
-fn calculate_initial_margin(net_exposure: i64, splits: &[SlabSplit]) -> u128 {
+fn calculate_initial_margin(net_exposure: i64, splits: &[V0SlabSplit]) -> u128 {
     // For v0, simplified: IM = abs(net_exposure) * avg_price * 0.1 (10% IMR)
     if splits.is_empty() {
         return 0;

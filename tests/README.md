@@ -32,6 +32,7 @@ SBF_OUT_DIR=target/deploy cargo test --test benchmark_cu --release -- --nocaptur
 |------|------|-------------|
 | `common/mod.rs` | Utilities | Shared test infrastructure and instruction builders |
 | `integration_reserve_commit.rs` | Integration | Reserve-commit flow tests using solana-program-test |
+| `integration_multi_slab.rs` | Integration | Multi-slab coordination tests (Phase 4) |
 | `property_invariants.rs` | Property | Protocol invariants using proptest (1000+ cases) |
 | `fuzz_instructions.rs` | Fuzz | Instruction parsing fuzzing (10,000+ cases) |
 | `chaos_soak.rs` | Soak | Long-running stability and load tests |
@@ -61,6 +62,27 @@ Tests include:
 - Cancel reservations
 - Update funding rates
 - Liquidation flows
+
+### 1.1 Multi-Slab Coordination Tests (`integration_multi_slab.rs`)
+
+Phase 4 tests for router-coordinated multi-slab operations:
+
+```bash
+cargo test --test integration_multi_slab -- --nocapture
+```
+
+Tests include (22 tests):
+- **Portfolio margin netting** - Verify gross vs net IM calculation
+- **Partial netting** - Long/short positions across slabs
+- **Multi-instrument netting** - BTC and ETH positions
+- **Liquidation health checks** - Below maintenance margin detection
+- **Liquidation priority** - Largest positions liquidated first
+- **Multi-slab reserve atomicity** - Reserve on multiple slabs with rollback
+- **Multi-slab commit atomicity** - Commit with partial failure handling
+- **Reservation expiry** - TTL enforcement
+- **CPI instruction data format** - Reserve/Commit/Cancel serialization
+- **CPI response parsing** - Return data deserialization
+- **Property tests** - Margin invariants and liquidation thresholds
 
 ### 2. Property-Based Tests (`property_invariants.rs`)
 

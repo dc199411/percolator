@@ -435,13 +435,40 @@ cargo test --test integration test_reserve_and_commit_flow
   - Statistical analysis (min, max, avg, p95)
   - Recommended CU budgets with headroom
 
-### 📋 Next Steps (Priority Order)
+### ✅ Phase 4 Complete - Multi-Slab Coordination
+- **Router orchestration** (`programs/router/src/instructions/multi_slab.rs`)
+  - Atomic multi-slab reserve with automatic rollback on failure
+  - Atomic multi-slab commit with partial failure handling
+  - Multi-slab cancel for cleanup operations
+  - Support for up to 8 slabs per operation
+  - TTL validation (5s min, 2min max per spec)
+- **Cross-slab portfolio margin** (`programs/router/src/instructions/portfolio_margin.rs`)
+  - Portfolio margin on NET exposure (capital efficiency proof)
+  - Gross vs net IM calculation with netting benefit tracking
+  - Correlation benefit framework for related instruments
+  - Mark-to-market operations with equity updates
+  - Maximum order size calculation considering margin
+  - Pre-trade and post-trade margin checks
+- **Global liquidation coordination** (`programs/router/src/instructions/liquidation.rs`)
+  - Cross-slab liquidation health checks
+  - Priority-ordered position liquidation (largest positions first)
+  - Insurance fund contributions (0.25% per liquidation)
+  - Liquidation fees (0.5%) with slippage protection (2% max)
+  - Deficit tracking and multi-position liquidation
+- **CPI integration** (`programs/router/src/instructions/cpi.rs`)
+  - Production-ready CPI calls using pinocchio `invoke`
+  - Reserve/Commit/Cancel/Liquidation instruction builders
+  - Return data parsing with proper error handling
+  - Multi-slab atomic operations with rollback support
+  - Account validation helpers
+- **New tests** (`tests/integration_multi_slab.rs`)
+  - 22 tests for multi-slab operations
+  - Portfolio netting verification
+  - Liquidation priority and deficit calculation
+  - CPI data format validation
+  - Property tests for margin calculations
 
-**Phase 4: Multi-Slab Coordination**
-- Router orchestration (multi-slab reserve/commit atomicity)
-- Cross-slab portfolio margin calculations
-- Global liquidation coordination
-- CPI integration between Router and Slab programs
+### 📋 Next Steps (Priority Order)
 
 **Phase 5: Production Readiness**
 - Slab-level insurance pools (v1 feature)
@@ -514,6 +541,6 @@ Apache-2.0
 
 ---
 
-**Status**: Phase 1-3 Complete ✅ | 71 unit tests + comprehensive test suite ✅ | BPF builds working ✅ | Phase 4 (multi-slab) next 🚀
+**Status**: Phase 1-4 Complete ✅ | 100+ unit tests + comprehensive test suite ✅ | BPF builds working ✅ | Multi-slab coordination ready ✅ | Phase 5 (production) next 🚀
 
 **Last Updated**: December 30, 2025
