@@ -1,4 +1,6 @@
 pub mod initialize;
+#[cfg(test)]
+mod initialize_test;
 pub mod reserve;
 pub mod commit;
 pub mod cancel;
@@ -6,6 +8,7 @@ pub mod batch_open;
 pub mod liquidation;
 pub mod funding;
 pub mod add_instrument;
+pub mod insurance;
 
 pub use initialize::*;
 pub use reserve::*;
@@ -15,6 +18,7 @@ pub use batch_open::*;
 pub use liquidation::*;
 pub use funding::*;
 pub use add_instrument::*;
+pub use insurance::*;
 
 /// Instruction discriminator
 #[repr(u8)]
@@ -36,4 +40,16 @@ pub enum SlabInstruction {
     UpdateFunding = 6,
     /// Execute liquidation
     Liquidation = 7,
+    /// Initialize insurance pool (Phase 5)
+    InitializeInsurance = 8,
+    /// Contribute to insurance pool (Phase 5)
+    ContributeInsurance = 9,
+    /// Initiate insurance withdrawal (Phase 5)
+    InitiateInsuranceWithdrawal = 10,
+    /// Complete insurance withdrawal (Phase 5)
+    CompleteInsuranceWithdrawal = 11,
+    /// Cancel insurance withdrawal (Phase 5)
+    CancelInsuranceWithdrawal = 12,
+    /// Update insurance config (Phase 5)
+    UpdateInsuranceConfig = 13,
 }
