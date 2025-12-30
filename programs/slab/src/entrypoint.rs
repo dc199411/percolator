@@ -8,7 +8,17 @@ use pinocchio::{
     ProgramResult,
 };
 
-use crate::instructions::{SlabInstruction, process_reserve, process_commit, process_cancel, process_batch_open, process_initialize_slab};
+use crate::instructions::{
+    SlabInstruction, 
+    process_reserve, 
+    process_commit, 
+    process_cancel, 
+    process_batch_open, 
+    process_initialize_slab,
+    process_add_instrument,
+    process_update_funding,
+    process_liquidation,
+};
 use crate::state::SlabState;
 use percolator_common::{PercolatorError, validate_owner, validate_writable, borrow_account_data_mut, InstructionReader};
 
@@ -34,8 +44,10 @@ pub fn process_instruction(
         3 => SlabInstruction::BatchOpen,
         4 => SlabInstruction::Initialize,
         5 => SlabInstruction::AddInstrument,
+        6 => SlabInstruction::UpdateFunding,
+        7 => SlabInstruction::Liquidation,
         _ => {
-            msg!("Error: Unknown instruction: {}", discriminator);
+            msg!("Error: Unknown instruction");
             return Err(PercolatorError::InvalidInstruction.into());
         }
     };
@@ -65,6 +77,14 @@ pub fn process_instruction(
         SlabInstruction::AddInstrument => {
             msg!("Instruction: AddInstrument");
             process_add_instrument_inner(program_id, accounts, &instruction_data[1..])
+        }
+        SlabInstruction::UpdateFunding => {
+            msg!("Instruction: UpdateFunding");
+            process_update_funding_inner(program_id, accounts, &instruction_data[1..])
+        }
+        SlabInstruction::Liquidation => {
+            msg!("Instruction: Liquidation");
+            process_liquidation_inner(program_id, accounts, &instruction_data[1..])
         }
     }
 }
@@ -289,9 +309,14 @@ fn process_initialize_inner(program_id: &Pubkey, accounts: &[AccountInfo], data:
 ///
 /// Expected accounts:
 /// 0. `[writable]` Slab state account
-/// 1. `[signer]` Authority
+/// 1. `[signer]` Authority (LP owner)
 ///
-/// Expected data layout: TBD (instrument parameters)
+/// Expected data layout (32 bytes):
+/// - symbol: [u8; 8] (8 bytes)
+/// - contract_size: u64 (8 bytes)
+/// - tick: u64 (8 bytes)
+/// - lot: u64 (8 bytes)
+/// - initial_mark: u64 (8 bytes)
 fn process_add_instrument_inner(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     if accounts.len() < 1 {
         msg!("Error: AddInstrument instruction requires at least 1 account");
@@ -302,12 +327,93 @@ fn process_add_instrument_inner(program_id: &Pubkey, accounts: &[AccountInfo], d
     validate_owner(slab_account, program_id)?;
     validate_writable(slab_account)?;
 
-    let _slab = unsafe { borrow_account_data_mut::<SlabState>(slab_account)? };
+    let slab = unsafe { borrow_account_data_mut::<SlabState>(slab_account)? };
 
-    // TODO: Parse instrument data and add to slab
-    // This will be implemented when we have instrument addition logic
-    let _ = data;
+    // Parse instruction data
+    let mut reader = InstructionReader::new(data);
+    let symbol = reader.read_bytes::<8>()?;
+    let contract_size = reader.read_u64()?;
+    let tick = reader.read_u64()?;
+    let lot = reader.read_u64()?;
+    let initial_mark = reader.read_u64()?;
 
-    msg!("AddInstrument instruction validated - implementation pending");
+    // Call the instruction handler
+    let idx = process_add_instrument(slab, symbol, contract_size, tick, lot, initial_mark)?;
+
+    msg!("AddInstrument processed successfully");
+    Ok(())
+}
+
+/// Process update funding instruction
+///
+/// Expected accounts:
+/// 0. `[writable]` Slab state account
+/// 1. `[signer]` Oracle/Authority
+///
+/// Expected data layout (18 bytes):
+/// - instrument_idx: u16 (2 bytes)
+/// - index_price: u64 (8 bytes)
+/// - current_ts: u64 (8 bytes)
+fn process_update_funding_inner(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
+    if accounts.len() < 1 {
+        msg!("Error: UpdateFunding instruction requires at least 1 account");
+        return Err(PercolatorError::InvalidInstruction.into());
+    }
+
+    let slab_account = &accounts[0];
+    validate_owner(slab_account, program_id)?;
+    validate_writable(slab_account)?;
+
+    let slab = unsafe { borrow_account_data_mut::<SlabState>(slab_account)? };
+
+    // Parse instruction data
+    let mut reader = InstructionReader::new(data);
+    let instrument_idx = reader.read_u16()?;
+    let index_price = reader.read_u64()?;
+    let current_ts = reader.read_u64()?;
+
+    // Call the instruction handler
+    process_update_funding(slab, instrument_idx, index_price, current_ts)?;
+
+    msg!("UpdateFunding processed successfully");
+    Ok(())
+}
+
+/// Process liquidation instruction
+///
+/// Expected accounts:
+/// 0. `[writable]` Slab state account
+/// 1. `[signer]` Router authority
+///
+/// Expected data layout (20 bytes):
+/// - account_idx: u32 (4 bytes)
+/// - deficit_target: i128 (16 bytes) - stored as bytes
+/// - current_ts: u64 (8 bytes)
+fn process_liquidation_inner(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
+    if accounts.len() < 1 {
+        msg!("Error: Liquidation instruction requires at least 1 account");
+        return Err(PercolatorError::InvalidInstruction.into());
+    }
+
+    let slab_account = &accounts[0];
+    validate_owner(slab_account, program_id)?;
+    validate_writable(slab_account)?;
+
+    let slab = unsafe { borrow_account_data_mut::<SlabState>(slab_account)? };
+
+    // Parse instruction data
+    let mut reader = InstructionReader::new(data);
+    let account_idx = reader.read_u32()?;
+    
+    // Read deficit_target as i128 (16 bytes)
+    let deficit_bytes = reader.read_bytes::<16>()?;
+    let deficit_target = i128::from_le_bytes(deficit_bytes);
+    
+    let current_ts = reader.read_u64()?;
+
+    // Call the instruction handler
+    let result = process_liquidation(slab, account_idx, deficit_target, current_ts)?;
+
+    msg!("Liquidation processed successfully");
     Ok(())
 }

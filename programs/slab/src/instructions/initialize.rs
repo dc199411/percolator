@@ -1,13 +1,13 @@
-//! Initialize instruction - initialize slab state (v0 minimal)
+//! Initialize instruction - initialize slab state with full pools
 
 use crate::pda::derive_slab_pda;
 use crate::state::{SlabHeader, SlabState};
 use percolator_common::*;
 use pinocchio::{account_info::AccountInfo, msg, pubkey::Pubkey};
 
-/// Process initialize instruction for slab (v0 minimal)
+/// Process initialize instruction for slab
 ///
-/// Initializes the ~4KB slab state account with header, quote cache, and book.
+/// Initializes the slab state account with header, pools, and quote cache.
 /// This is called once during slab deployment for each market.
 ///
 /// # Arguments
@@ -16,18 +16,22 @@ use pinocchio::{account_info::AccountInfo, msg, pubkey::Pubkey};
 /// * `market_id` - Unique market identifier (32 bytes)
 /// * `lp_owner` - LP owner pubkey
 /// * `router_id` - Router program ID
-/// * `instrument` - Shared instrument ID (agreed with router)
-/// * `mark_px` - Initial mark price from oracle (1e6 scale)
-/// * `taker_fee_bps` - Taker fee (basis points, 1e6 scale)
+/// * `imr_bps` - Initial margin ratio (basis points)
+/// * `mmr_bps` - Maintenance margin ratio (basis points)
+/// * `maker_fee_bps` - Maker fee (signed, can be negative for rebates)
+/// * `taker_fee_bps` - Taker fee (basis points)
+/// * `batch_ms` - Batch window in milliseconds
 pub fn process_initialize_slab(
     program_id: &Pubkey,
     slab_account: &AccountInfo,
     market_id: [u8; 32],
     lp_owner: Pubkey,
     router_id: Pubkey,
-    instrument: Pubkey,
-    mark_px: i64,
-    taker_fee_bps: i64,
+    imr_bps: u64,
+    mmr_bps: u64,
+    maker_fee_bps: i64,
+    taker_fee_bps: u64,
+    batch_ms: u64,
 ) -> Result<(), PercolatorError> {
     // Derive and verify slab PDA
     let (expected_pda, bump) = derive_slab_pda(&market_id, program_id);
@@ -37,12 +41,12 @@ pub fn process_initialize_slab(
         return Err(PercolatorError::InvalidAccount);
     }
 
-    // Verify account size (~4KB for v0)
+    // Verify account has enough space
     let data = slab_account.try_borrow_data()
         .map_err(|_| PercolatorError::InvalidAccount)?;
 
-    if data.len() != SlabState::LEN {
-        msg!("Error: Slab account has incorrect size");
+    if data.len() < SlabState::LEN {
+        msg!("Error: Slab account has insufficient size");
         return Err(PercolatorError::InvalidAccount);
     }
 
@@ -57,19 +61,21 @@ pub fn process_initialize_slab(
     // Initialize the slab state
     let slab = unsafe { borrow_account_data_mut::<SlabState>(slab_account)? };
 
-    // Initialize header with v0 parameters
-    let header = SlabHeader::new(
+    // Initialize header with parameters
+    slab.header = SlabHeader::new(
         *program_id,
         lp_owner,
         router_id,
-        instrument,
-        mark_px,
+        imr_bps,
+        mmr_bps,
+        maker_fee_bps,
         taker_fee_bps,
+        batch_ms,
         bump,
     );
 
-    // Create new slab state (initializes quote_cache and book automatically)
-    *slab = SlabState::new(header);
+    // Initialize all pools with freelists
+    slab.initialize_pools();
 
     msg!("Slab initialized successfully");
     Ok(())

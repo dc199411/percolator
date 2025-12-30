@@ -342,20 +342,28 @@ cargo test --test integration test_reserve_and_commit_flow
 
 ## Current Status
 
-### ✅ Completed
-- Core data structures (Router & Slab)
-- Memory pools with O(1) freelists
-- Order book management (insert, remove, promote)
-- Reserve operation (lock slices, calculate VWAP)
-- Commit operation (execute trades at maker prices)
-- Risk calculations (equity, IM/MM, liquidation checks)
-- Capability system (time-limited scoped debits)
-- Fixed-point math utilities (VWAP, PnL, margin)
-- Compile-time size constraints (10 MB enforced)
-- PDA derivation helpers (all account types)
-- Instruction dispatching framework
-- BPF build support (panic handlers, no_std)
-- Comprehensive unit tests (53 tests passing)
+### ✅ Phase 1 Complete - Core Program Logic
+- **Core data structures** (Router & Slab) with full pools
+- **Memory pools** with O(1) freelists (orders, positions, reservations, slices)
+- **Order book management** (insert, remove, promote, price-time priority)
+- **Reserve operation** (walk book, lock slices, calculate VWAP/max_charge)
+- **Commit operation** (execute trades at maker prices, apply fees, update positions)
+- **Cancel operation** (release reservations, restore available qty)
+- **Batch open** (promote pending orders, increment epoch, freeze windows)
+- **Anti-toxicity mechanisms**:
+  - Kill band (reject if mark moved beyond threshold)
+  - JIT penalty (no rebate for orders posted too recently)
+  - Freeze levels (top-K order protection)
+  - ARG parameters (aggressor roundtrip guard)
+- **Funding rate updates** (time-weighted calculations, position funding accrual)
+- **Liquidation execution** (position closure, PnL settlement, price bands)
+- **Risk calculations** (equity, IM/MM, liquidation checks)
+- **Capability system** (time-limited scoped debits)
+- **Fixed-point math utilities** (VWAP, PnL, margin)
+- **PDA derivation helpers** (all account types)
+- **Instruction dispatching** (8 slab instructions, 5 router instructions)
+- **BPF build support** (panic handlers, no_std)
+- **Comprehensive unit tests** (71 tests passing)
 - Integration test templates with Surfpool (3 test files with 15+ scenarios)
 - Property-based test framework with invariant checks
 
@@ -364,13 +372,6 @@ cargo test --test integration test_reserve_and_commit_flow
 - Solana build tooling setup (cargo build-sbf installation)
 
 ### 📋 Next Steps (Priority Order)
-
-**Phase 1: Complete Core Program Logic**
-- Implement instruction handler bodies (account validation, deserialization)
-- Complete anti-toxicity mechanism integration (kill band, JIT penalty, ARG)
-- Implement funding rate updates (time-weighted calculations)
-- Implement liquidation execution (position closure, PnL settlement)
-- Add account initialization helpers
 
 **Phase 2: Build and Deploy**
 - Set up Solana Platform Tools for BPF builds
@@ -447,6 +448,6 @@ Apache-2.0
 
 ---
 
-**Status**: Core infrastructure complete ✅ | 53 unit tests passing ✅ | Phase 1 (instruction handlers) next 🚀
+**Status**: Phase 1 Complete ✅ | 71 unit tests passing ✅ | Phase 2 (build & deploy) next 🚀
 
-**Last Updated**: October 20, 2025
+**Last Updated**: December 30, 2025
